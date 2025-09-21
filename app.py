@@ -20,7 +20,7 @@ st.markdown("**South African Microfinance NCA Compliance Tool**")
 
 # Initialize the agent
 @st.cache_resource
-def load_agent():
+
     
 
 agent = load_agent()
