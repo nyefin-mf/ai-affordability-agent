@@ -1,10 +1,8 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
 from main import SimpleAffordabilityAgent
 
-# Load environment variables
-load_dotenv()
+
 
 # Page configuration
 st.set_page_config(
