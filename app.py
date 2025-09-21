@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import re
 from collections import defaultdict
-from datetime import datetime
 
 st.set_page_config(page_title="Max Smart Affordability", page_icon="🤖")
 st.markdown("<h2 style='text-align:center; color:#1976d2'>🤖 Ultimate Smart Affordability Analyzer</h2>", unsafe_allow_html=True)
@@ -41,7 +40,7 @@ def find_transactions_from_text(text):
         if amt_match:
             amount_raw = amt_match[-1][0]
             amount = float(amount_raw.upper().replace('R','').replace(" ","").replace(",",""))
-            desc = desc_part.strip().split(amount_raw)[0].strip()[:36]
+            desc = desc_part.strip().split(amount_raw)[0].strip()[:40]
             results.append((date, desc, amount))
     return results
 
@@ -60,51 +59,60 @@ def find_transactions_from_csv(df):
     for _, row in df.iterrows():
         try:
             date = str(row[date_col])[:10] if date_col else ''
-            desc = str(row[desc_col])[:36] if desc_col else ''
+            desc = str(row[desc_col])[:40] if desc_col else ''
             amount = float(str(row[amt_col]).replace("R","").replace(",","").strip()) if amt_col else 0.0
             txns.append((date, desc, amount))
         except:
             continue
     return txns
 
-def detect_recurring_income(txns):
-    # Group credits by amount and loose description, flag most frequent as salary
-    credits = defaultdict(list)
-    for d, desc, amt in txns:
-        if amt > 1000:
-            key = (round(amt, -2), desc[:16].lower())
-            credits[key].append(d)
-    recurring = {}
-    for (amt, desc), dates in credits.items():
-        months = set(x[:7] for x in dates if '-' in x) | set(f"20{x[-2:]}" for x in dates if '/' in x)
-        if len(dates) >= 3 and len(months) >= 2:
-            recurring[amt] = len(dates)
-    return max(recurring.keys()) if recurring else max([amt for (_,_,amt) in txns if amt > 1000], default=12000)
-
-def detect_recurring_expenses(txns):
-    # Smart keyword set
-    keywords = [
-        "debit", "order", "payment", "stop", "insurance", "cell", "vodacom", "mtn", "dstv", "medical",
-        "loan", "rent", "bond", "gym", "club", "subscription", "finance", "plan", "policy", "child", "life", "edgars", "truworths", "insurance", "license", "ufiling"
+def advanced_expense_detection(txns):
+    # Keywords for recurring expenses (fuzzy match)
+    main_keywords = [
+        "debit", "direct debit", "prepaid debit", "digital payment", "payment", "insurance", "cell", "vodacom",
+        "mtn", "dstv", "medical", "loan", "rent", "bond", "gym", "club", "child", "skool", "school",
+        "maintenance", "onderhoud", "fee", "electricity", "admin fee", "tracker", "policy", "prem", "legacy",
+        "sirago", "scanfin", "nyefin", "getz", "nasorg", "verblyf", "edgars", "truworths", "license", "ufiling"
     ]
     expense_items = defaultdict(list)
     for d, desc, amt in txns:
-        if amt < -300:
+        if amt < -250:
             desc_l = desc.lower()
-            for k in keywords:
+            found_kw = None
+            for k in main_keywords:
                 if k in desc_l:
-                    # Group by keyword and amount rounded to nearest R100 for loose match
-                    expense_items[(k, round(abs(amt), -2))].append(d)
+                    found_kw = k
+                    break
+            if found_kw:
+                # Round amount for grouping variants
+                rounded_amt = round(abs(amt), -1)
+                expense_items[(found_kw, rounded_amt)].append(d)
+    # Recurring: ≥2 in ≥2 months
     recurring = {}
-    for (kw, amt), dates in expense_items.items():
-        months = set(x[:7] for x in dates if '-' in x)
-        if len(dates) >= 2 and len(months) >= 2:
-            recurring[(kw, amt)] = len(dates)
-    total = sum(amt for (kw, amt), ct in recurring.items())
-    details = "\n".join([f"- {kw.title()} R{amt:,.0f}/m ({ct}x)" for (kw, amt), ct in recurring.items()])
-    return total, details
+    for (kw, amt), dts in expense_items.items():
+        months = set(x[:7] for x in dts if '-' in x)
+        if len(months) >= 2 and len(dts) >= 2:
+            recurring[(kw, amt)] = len(dts)
+    total_expense = sum(amt for (kw, amt), ct in recurring.items())
+    details = "\n".join([f"- {kw.title()} R{amt:,.2f} (x{ct})" for (kw, amt), ct in recurring.items()])
+    return total_expense, details
 
-# Upload file
+def advanced_income_detection(txns):
+    credits = defaultdict(list)
+    salary_keywords = ["salary", "credit", "scanfin", "nyefin", "good hope"]
+    for d, desc, amt in txns:
+        if amt > 1000:
+            desc_l = desc.lower()
+            if any(k in desc_l for k in salary_keywords):
+                key = (round(amt, -2), desc_l[:24])
+                credits[key].append(d)
+    recurring = {}
+    for (amt, desc), dates in credits.items():
+        months = set(x[:7] for x in dates if '-' in x)
+        if len(months) >= 2 and len(dates) >= 2:
+            recurring[amt] = len(dates)
+    return max(recurring.keys()) if recurring else max([amt for (_, _, amt) in txns if amt > 1000], default=12000)
+
 statement_file = st.file_uploader("Upload PDF or CSV bank statement", type=['pdf','csv'])
 
 if statement_file:
@@ -117,15 +125,15 @@ if statement_file:
     else:
         txns = []
 
-    salary_amt = detect_recurring_income(txns)
-    total_recurring_expense, recurring_detail = detect_recurring_expenses(txns)
+    salary_amt = advanced_income_detection(txns)
+    total_recurring_expense, recurring_detail = advanced_expense_detection(txns)
 
     existing_debt = salary_amt * 0.13
     term, rate = 24, 22
     net_income = salary_amt * 0.75
     discretionary_income = net_income - total_recurring_expense - existing_debt
     max_monthly_payment = discretionary_income / 1.5 if discretionary_income > 0 else 0
-    monthly_rate = rate/100/12
+    monthly_rate = rate / 100 / 12
     if monthly_rate > 0:
         qualifying_loan = max_monthly_payment * ((1 + monthly_rate) ** term - 1) / (monthly_rate * (1 + monthly_rate) ** term)
     else:
@@ -139,8 +147,6 @@ if statement_file:
         st.markdown(f"<div style='background:#d4edda; color:#155724; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>✅ You qualify for up to:<br><b>R{qualifying_loan:,.0f}</b></div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div style='background:#f8d7da; color:#721c24; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>❌ Sorry, you do not qualify currently</div>", unsafe_allow_html=True)
-
-        # REASONS FOR DECLINE
         st.markdown("#### Why? Detailed reasons for decline:")
         reasons = []
         if salary_amt < 5000:
@@ -157,7 +163,6 @@ if statement_file:
             reasons.append("• Calculated affordable loan amount is below minimum threshold (R1,000).")
         if not reasons:
             reasons.append("• Other: Detected issue with compliance calculation or missing/unclear statement data.")
-
         for reason in reasons:
             st.write(reason)
 
@@ -165,15 +170,13 @@ if statement_file:
     st.write(f"- **Monthly Recurring Credit (income):** R{salary_amt:,.2f}")
     st.write(f"- **Total Recurring Monthly Debits:** R{total_recurring_expense:,.2f}")
     st.write(f"- **Estimated other debts:** R{existing_debt:,.2f}")
-    st.markdown("#### Recurring Expenses (details):")
+    st.markdown('#### Expense Details')
     st.text(recurring_detail if recurring_detail else "No strong recurring monthly expenses found.")
-
     st.markdown("#### Affordability Ratios")
     st.write(f"- **Discretionary income:** R{discretionary_income:,.2f}/month")
     st.write(f"- **Affordability ratio:** {affordability_ratio:.1f}%")
     st.write(f"- **Debt service ratio:** {debt_service_ratio:.1f}%")
     st.write(f"- **NCA Compliance:** {'Yes' if nca_compliant else 'No'}")
-
     st.markdown("---")
     st.markdown("**Assumptions and logic:**")
     st.write(f"- Loan term: {term} months, interest {rate}%, existing debt heuristically assigned if not directly detected.")
