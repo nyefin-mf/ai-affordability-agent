@@ -103,8 +103,8 @@ def smart_expense_detection(transactions):
     total_expense = sum(amount for (cat, amount, desc), count in recurring_expenses.items())
     
     details = []
-    for (category, amount, desc), count in sorted(recurring_expenses.items(), key=lambda x: x[1][0], reverse=True):
-        details.append(f"• {category.title()}: R{amount:,.0f}/month ({desc[:25]}) x{count}")
+    for (category, amount, desc), count in sorted(recurring_expenses.items(), key=lambda x: x[0][1], reverse=True):
+
     
     return total_expense, '\n'.join(details)
 
