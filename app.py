@@ -231,4 +231,5 @@ with tab3:
             st.write("✅ Income verification completed")
             st.write("✅ Affordability assessment performed") 
             st.write(f"{'✅' if nca_compliant else '❌'} 150% payment buffer maintained")
-            st.write(f"{'✅' if debt_service_ratio <= 30 else '❌'} Debt service
+            st.write(f"{'✅' if debt_service_ratio <= 30 else '❌'} Debt service ratio ≤ 30%")
+
