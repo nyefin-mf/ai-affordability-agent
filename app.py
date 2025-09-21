@@ -18,7 +18,6 @@ def extract_pdf_text(pdf_file):
         return ""
 
 def load_csv(file):
-    # Accept standard exported (FNB, ABSA, Capitec, Nedbank, Standard Bank) CSVs
     try:
         df = pd.read_csv(file)
     except:
@@ -28,7 +27,6 @@ def load_csv(file):
     return df
 
 def find_transactions_from_text(text):
-    # Heuristically extract: date (DD/MM or YYYY-MM), description, amount
     lines = [l.strip() for l in text.split('\n') if len(l.strip()) > 16]
     results = []
     txn_pat = re.compile(r'((?:\d{2,4}[\/\-]\d{2}[\/\-]\d{2,4})|(?:\d{2}[\/\-]\d{2}[\/\-]\d{2,4}))')
@@ -48,7 +46,6 @@ def find_transactions_from_text(text):
     return results
 
 def find_transactions_from_csv(df):
-    # Map CSV columns to standard fields
     amt_col = None
     for c in df.columns:
         if 'amount' in c: amt_col = c
@@ -71,7 +68,6 @@ def find_transactions_from_csv(df):
     return txns
 
 def cluster_recurring_txns(txns, typ="debit"):
-    # Group by rounded amount and cleaned description
     clusters = defaultdict(list)
     for d, desc, amt in txns:
         descr = ''.join([c for c in desc.lower() if c.isalnum() or c == " "]).replace("  "," ").strip()
@@ -83,7 +79,6 @@ def cluster_recurring_txns(txns, typ="debit"):
             clusters[key].append(d)
     recurring = {}
     for k,v in clusters.items():
-        # If >=3 (3 months), and seen in at least 2 unique months, call recurring
         months = set(x[:7] for x in v if '-' in x) | set(f"20{x[-2:]}" for x in v if '/' in x)
         if len(v)>=3 and len(months)>=2:
             recurring[k] = len(v)
@@ -115,7 +110,6 @@ if statement_file:
     total_recurring_expense = sum(a*ct for (_,a),ct in recurring_debits.items())
     recurring_detail = "\n".join([f"- {desc.title()} R{amt:,.0f}/m ({ct}x)" for (desc,amt), ct in recurring_debits.items()])
 
-    # Automated, expense ratios
     existing_debt = salary_amt * 0.13
     term, rate = 24, 22
     net_income = salary_amt * 0.75
@@ -130,10 +124,10 @@ if statement_file:
     debt_service_ratio = max_monthly_payment / net_income * 100 if net_income > 0 else 0
     nca_compliant = discretionary_income > 0 and affordability_ratio >= 25 and debt_service_ratio <= 30
 
-        st.markdown("### Results")
-        if nca_compliant and qualifying_loan >= 1000:
+    st.markdown("### Results")
+    if nca_compliant and qualifying_loan >= 1000:
         st.markdown(f"<div style='background:#d4edda; color:#155724; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>✅ You qualify for up to:<br><b>R{qualifying_loan:,.0f}</b></div>", unsafe_allow_html=True)
-        else:
+    else:
         st.markdown(f"<div style='background:#f8d7da; color:#721c24; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>❌ Sorry, you do not qualify currently</div>", unsafe_allow_html=True)
         
         # REASONS FOR DECLINE
@@ -156,7 +150,6 @@ if statement_file:
 
         for reason in reasons:
             st.write(reason)
-
 
     st.markdown("#### Detected Income & Recurring Expenses")
     st.write(f"- **Monthly Recurring Credit (income):** R{salary_amt:,.2f}")
