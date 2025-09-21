@@ -136,13 +136,20 @@ with tab1:
 with tab2:
     st.header("💰 Loan Application Details")
     default_income = getattr(st.session_state, 'estimated_income', 15000)
-    if hasattr(st.session_state, 'payslip_data'):
-        default_income = max(default_income, st.session_state.payslip_data['gross'])
+if hasattr(st.session_state, 'payslip_data'):
+    default_income = max(default_income, st.session_state.payslip_data['gross'])
+
     with st.form("application_form"):
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📊 Income & Expenses")
-            monthly_income = st.number_input("Monthly Gross Income (R)", value=default_income, min_value=1000)
+            monthly_income = st.write(
+    "Monthly Gross Income (R)", 
+    value=default_income, 
+    min_value=1000,
+    disabled=True  # <- disables manual editing
+)
+
             monthly_expenses = st.number_input("Monthly Expenses (R)", value=8000, min_value=1000)
             existing_debt = st.number_input("Existing Debt Payments (R)", value=2000, min_value=0)
             employment_months = st.number_input("Employment Duration (months)", value=24, min_value=1)
