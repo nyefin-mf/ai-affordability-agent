@@ -130,11 +130,33 @@ if statement_file:
     debt_service_ratio = max_monthly_payment / net_income * 100 if net_income > 0 else 0
     nca_compliant = discretionary_income > 0 and affordability_ratio >= 25 and debt_service_ratio <= 30
 
-    st.markdown("### Results")
+        st.markdown("### Results")
     if nca_compliant and qualifying_loan >= 1000:
         st.markdown(f"<div style='background:#d4edda; color:#155724; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>✅ You qualify for up to:<br><b>R{qualifying_loan:,.0f}</b></div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div style='background:#f8d7da; color:#721c24; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>❌ Sorry, you do not qualify currently</div>", unsafe_allow_html=True)
+        
+        # REASONS FOR DECLINE
+        st.markdown("#### Why? Detailed reasons for decline:")
+        reasons = []
+        if salary_amt < 5000:
+            reasons.append("• No strong recurring income detected (no salary or similar incoming payments can be reliably found).")
+        if total_recurring_expense >= 0.7 * salary_amt:
+            reasons.append(f"• Recurring expenses are too high compared to income (expenses detected: R{total_recurring_expense:,.2f}).")
+        if discretionary_income <= 0:
+            reasons.append("• After recurring expenses and estimated debts, there is no discretionary income left each month.")
+        if affordability_ratio < 25:
+            reasons.append(f"• Affordability ratio is below the legal NCA threshold (needed: 25%+, found: {affordability_ratio:.1f}%).")
+        if debt_service_ratio > 30:
+            reasons.append(f"• Debt service ratio is above allowed level (needed: ≤30%, found: {debt_service_ratio:.1f}%).")
+        if qualifying_loan < 1000:
+            reasons.append("• Calculated affordable loan amount is below minimum threshold (R1,000).")
+        if not reasons:
+            reasons.append("• Other: Detected issue with compliance calculation or missing/unclear statement data.")
+
+        for reason in reasons:
+            st.write(reason)
+
 
     st.markdown("#### Detected Income & Recurring Expenses")
     st.write(f"- **Monthly Recurring Credit (income):** R{salary_amt:,.2f}")
