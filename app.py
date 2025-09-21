@@ -103,8 +103,9 @@ def smart_expense_detection(transactions):
     total_expense = sum(amount for (cat, amount, desc), count in recurring_expenses.items())
     
     details = []
+    # Sort by amount (descending)
     for (category, amount, desc), count in sorted(recurring_expenses.items(), key=lambda x: x[0][1], reverse=True):
-
+        details.append(f"• {category.title()}: R{amount:,.0f}/month ({desc[:25]}) x{count}")
     
     return total_expense, '\n'.join(details)
 
@@ -151,9 +152,21 @@ if uploaded_file:
                 st.stop()
             transactions = parse_transactions_from_text(text)
         else:  # CSV
-            df = pd.read_csv(uploaded_file)
-            st.error("CSV parsing not fully implemented yet. Please use PDF for now.")
-            st.stop()
+            try:
+                df = pd.read_csv(uploaded_file)
+                st.info("CSV processing - basic implementation")
+                transactions = []
+                for _, row in df.iterrows():
+                    try:
+                        date = str(row[0])[:10]
+                        desc = str(row[1])[:50]
+                        amount = float(str(row[2]).replace('R','').replace(',',''))
+                        transactions.append((date, desc, amount))
+                    except:
+                        continue
+            except:
+                st.error("Could not process CSV file.")
+                st.stop()
         
         if not transactions:
             st.error("No transactions found. Please check your file format.")
