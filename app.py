@@ -67,28 +67,48 @@ def find_transactions_from_csv(df):
             continue
     return txns
 
-def cluster_recurring_txns(txns, typ="debit"):
-    clusters = defaultdict(list)
+def detect_recurring_income(txns):
+    # Group credits by amount and loose description, flag most frequent as salary
+    credits = defaultdict(list)
     for d, desc, amt in txns:
-        descr = ''.join([c for c in desc.lower() if c.isalnum() or c == " "]).replace("  "," ").strip()
-        if typ=="debit" and amt < 0:
-            key = (descr[:16], round(abs(amt),-2))
-            clusters[key].append(d)
-        if typ=="credit" and amt > 0:
-            key = (descr[:16], round(amt,-2))
-            clusters[key].append(d)
+        if amt > 1000:
+            key = (round(amt, -2), desc[:16].lower())
+            credits[key].append(d)
     recurring = {}
-    for k,v in clusters.items():
-        months = set(x[:7] for x in v if '-' in x) | set(f"20{x[-2:]}" for x in v if '/' in x)
-        if len(v)>=3 and len(months)>=2:
-            recurring[k] = len(v)
-    return recurring
+    for (amt, desc), dates in credits.items():
+        months = set(x[:7] for x in dates if '-' in x) | set(f"20{x[-2:]}" for x in dates if '/' in x)
+        if len(dates) >= 3 and len(months) >= 2:
+            recurring[amt] = len(dates)
+    return max(recurring.keys()) if recurring else max([amt for (_,_,amt) in txns if amt > 1000], default=12000)
+
+def detect_recurring_expenses(txns):
+    # Smart keyword set
+    keywords = [
+        "debit", "order", "payment", "stop", "insurance", "cell", "vodacom", "mtn", "dstv", "medical",
+        "loan", "rent", "bond", "gym", "club", "subscription", "finance", "plan", "policy", "child", "life", "edgars", "truworths", "insurance", "license", "ufiling"
+    ]
+    expense_items = defaultdict(list)
+    for d, desc, amt in txns:
+        if amt < -300:
+            desc_l = desc.lower()
+            for k in keywords:
+                if k in desc_l:
+                    # Group by keyword and amount rounded to nearest R100 for loose match
+                    expense_items[(k, round(abs(amt), -2))].append(d)
+    recurring = {}
+    for (kw, amt), dates in expense_items.items():
+        months = set(x[:7] for x in dates if '-' in x)
+        if len(dates) >= 2 and len(months) >= 2:
+            recurring[(kw, amt)] = len(dates)
+    total = sum(amt for (kw, amt), ct in recurring.items())
+    details = "\n".join([f"- {kw.title()} R{amt:,.0f}/m ({ct}x)" for (kw, amt), ct in recurring.items()])
+    return total, details
 
 # Upload file
 statement_file = st.file_uploader("Upload PDF or CSV bank statement", type=['pdf','csv'])
 
 if statement_file:
-    if statement_file.type=='application/pdf':
+    if statement_file.type == 'application/pdf':
         text = extract_pdf_text(statement_file)
         txns = find_transactions_from_text(text)
     elif statement_file.type in ('text/csv','application/vnd.ms-excel','application/octet-stream'):
@@ -97,18 +117,8 @@ if statement_file:
     else:
         txns = []
 
-    recurring_credits = cluster_recurring_txns(txns, typ="credit")
-    recurring_debits = cluster_recurring_txns(txns, typ="debit")
-
-    # NET monthly income: largest recurring credit each month
-    if recurring_credits:
-        salary_amt = max(a for (d,a),ct in recurring_credits.items())
-    else:
-        credits = [amt for _,_,amt in txns if amt>1000]
-        salary_amt = max(credits) if credits else 12000
-
-    total_recurring_expense = sum(a*ct for (_,a),ct in recurring_debits.items())
-    recurring_detail = "\n".join([f"- {desc.title()} R{amt:,.0f}/m ({ct}x)" for (desc,amt), ct in recurring_debits.items()])
+    salary_amt = detect_recurring_income(txns)
+    total_recurring_expense, recurring_detail = detect_recurring_expenses(txns)
 
     existing_debt = salary_amt * 0.13
     term, rate = 24, 22
@@ -129,7 +139,7 @@ if statement_file:
         st.markdown(f"<div style='background:#d4edda; color:#155724; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>✅ You qualify for up to:<br><b>R{qualifying_loan:,.0f}</b></div>", unsafe_allow_html=True)
     else:
         st.markdown(f"<div style='background:#f8d7da; color:#721c24; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>❌ Sorry, you do not qualify currently</div>", unsafe_allow_html=True)
-        
+
         # REASONS FOR DECLINE
         st.markdown("#### Why? Detailed reasons for decline:")
         reasons = []
@@ -167,7 +177,8 @@ if statement_file:
     st.markdown("---")
     st.markdown("**Assumptions and logic:**")
     st.write(f"- Loan term: {term} months, interest {rate}%, existing debt heuristically assigned if not directly detected.")
-    st.write("All recurring credits/debits detected by frequency, amount, and description clustering (3+ occurrences, 2+ months).")
+    st.write("Recurring credits: salary detected from most frequent incoming amounts.")
+    st.write("Recurring expenses: picks up debits with keywords and loose amount matching, requiring ≥2 in ≥2 months.")
     st.write("Works for major SA bank PDF or CSV statements.")
     if st.button("🔄 Try another statement"):
         st.experimental_rerun()
