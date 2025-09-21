@@ -131,9 +131,9 @@ if statement_file:
     nca_compliant = discretionary_income > 0 and affordability_ratio >= 25 and debt_service_ratio <= 30
 
         st.markdown("### Results")
-    if nca_compliant and qualifying_loan >= 1000:
+        if nca_compliant and qualifying_loan >= 1000:
         st.markdown(f"<div style='background:#d4edda; color:#155724; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>✅ You qualify for up to:<br><b>R{qualifying_loan:,.0f}</b></div>", unsafe_allow_html=True)
-    else:
+        else:
         st.markdown(f"<div style='background:#f8d7da; color:#721c24; border-radius:8px;padding:1rem;font-size:1.5rem;text-align:center;'>❌ Sorry, you do not qualify currently</div>", unsafe_allow_html=True)
         
         # REASONS FOR DECLINE
