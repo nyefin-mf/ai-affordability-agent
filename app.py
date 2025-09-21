@@ -1,5 +1,10 @@
 import streamlit as st
-import os
+import pandas as pd
+from datetime import datetime
+import re
+import io
+...
+
 
 
 
@@ -16,7 +21,7 @@ st.markdown("**South African Microfinance NCA Compliance Tool**")
 # Initialize the agent
 @st.cache_resource
 def load_agent():
-    return SimpleAffordabilityAgent()
+    
 
 agent = load_agent()
 
